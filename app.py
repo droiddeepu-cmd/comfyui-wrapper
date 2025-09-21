@@ -20,8 +20,6 @@ async def run_notebook(request: Request):
         cmd = [
             "kernel-run",
             notebook_url,
-            "--no-browser",
-            "--rm"  # optional: removes container after run
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
 
