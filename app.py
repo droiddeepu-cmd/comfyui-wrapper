@@ -1,16 +1,33 @@
-from fastapi import FastAPI, HTTPException
-from kernel_run import create_kernel
+from fastapi import FastAPI, Request
+import subprocess
 import os
 
 app = FastAPI()
 
-# Ensure Kaggle API credentials are set
-os.environ['KAGGLE_CONFIG_DIR'] = '/root/.kaggle'
+@app.get("/")
+def health():
+    return {"status": "ok", "message": "ComfyUI wrapper is running"}
 
-@app.post("/run_comfyui")
-async def run_comfyui(notebook_url: str):
+@app.post("/run")
+async def run_notebook(request: Request):
+    data = await request.json()
+    notebook_url = data.get("notebook_url")
+    if not notebook_url:
+        return {"error": "Missing notebook_url"}
+
     try:
-        kernel_url = create_kernel(notebook_url, public=True, no_browser=True)
-        return {"kernel_url": kernel_url}
+        # Run kernel-run
+        cmd = [
+            "kernel-run",
+            notebook_url,
+            "--no-browser",
+            "--rm"  # optional: removes container after run
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        return {
+            "stdout": result.stdout,
+            "stderr": result.stderr
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
