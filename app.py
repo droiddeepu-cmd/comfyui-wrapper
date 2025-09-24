@@ -68,3 +68,17 @@ async def run_notebook(request: Request):
 @app.get("/logs")
 def get_logs():
     return last_logs
+
+@app.get("/comfyui-url")
+def get_comfyui_url():
+    """Return stored ComfyUI public URL and IP if written by the notebook"""
+    json_path = "/kaggle/working/comfyui_url.json"
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, "r") as f:
+                data = json.load(f)
+            return {"status": "ok", "data": data}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+    else:
+        return {"status": "pending", "message": "No ComfyUI URL found yet"}
