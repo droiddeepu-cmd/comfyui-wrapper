@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 import subprocess
 import os
 import json
+import threading
 
 # ✅ Ensure kaggle.json exists
 os.makedirs("/root/.kaggle", exist_ok=True)
@@ -17,12 +18,16 @@ if not os.path.exists(kaggle_json_path):
 
 app = FastAPI()
 
+# store last run logs
+last_logs = {"stdout": "", "stderr": ""}
+
 @app.get("/")
 def health():
     return {"status": "ok", "message": "ComfyUI wrapper is running"}
 
 @app.post("/run")
 async def run_notebook(request: Request):
+    global last_logs
     data = await request.json()
     notebook_url = data.get("notebook_url")
     confirm = data.get("confirm", False)
@@ -38,18 +43,28 @@ async def run_notebook(request: Request):
             "notebook_url": notebook_url
         }
 
-    try:
-        # Run kernel-run with the notebook
-        cmd = [
-            "kernel-run",
-            notebook_url,
-            "--no-browser"
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+    def worker():
+        global last_logs
+        try:
+            cmd = [
+                "kernel-run",
+                notebook_url,
+                "--no-browser"
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            last_logs = {"stdout": result.stdout, "stderr": result.stderr}
+        except Exception as e:
+            last_logs = {"stdout": "", "stderr": str(e)}
 
-        return {
-            "stdout": result.stdout,
-            "stderr": result.stderr
-        }
-    except Exception as e:
-        return {"error": str(e)}
+    # run kernel in background thread
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+
+    return {
+        "status": "started",
+        "message": f"Notebook execution started for {notebook_url}"
+    }
+
+@app.get("/logs")
+def get_logs():
+    return last_logs
